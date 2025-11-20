@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, FileText, Sparkles, Zap, CheckCircle2 } from "lucide-react"
+import { ModeToggle } from "@/components/mode-toggle"
 
 export default function Home() {
   return (
@@ -10,7 +11,7 @@ export default function Home() {
       <div className="absolute bottom-0 right-0 w-[800px] h-[600px] bg-purple-500/10 rounded-full blur-[100px] -z-10" />
 
       <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-background/60 backdrop-blur-md">
-        <div className="container flex h-16 items-center justify-between">
+        <div className="container flex h-16 items-center justify-between px-4 md:px-8">
           <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/20">
               <span className="text-white font-bold text-lg">R</span>
@@ -18,6 +19,7 @@ export default function Home() {
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">ResumeEditor</span>
           </div>
           <nav className="flex items-center gap-4">
+            <ModeToggle />
             <Link href="/login">
               <Button variant="ghost" className="text-muted-foreground hover:text-foreground">Sign In</Button>
             </Link>
@@ -31,19 +33,19 @@ export default function Home() {
       </header>
 
       <main className="flex-1">
-        <section className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-32 relative">
-          <div className="container flex max-w-[64rem] flex-col items-center gap-6 text-center relative z-10">
+        <section className="space-y-6 pb-8 pt-12 md:pb-16 md:pt-20 lg:py-40 relative">
+          <div className="container flex max-w-[64rem] flex-col items-center gap-8 text-center relative z-10 mx-auto px-4">
             <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-sm font-medium text-primary backdrop-blur-sm">
               <span className="flex h-2 w-2 rounded-full bg-primary mr-2 animate-pulse"></span>
               v1.0 Now Available
             </div>
 
-            <h1 className="font-heading text-4xl sm:text-6xl md:text-7xl font-bold tracking-tight leading-tight">
+            <h1 className="font-heading text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-tight">
               Craft the perfect resume with <br />
               <span className="text-gradient">AI & LaTeX Precision</span>
             </h1>
 
-            <p className="max-w-[42rem] leading-normal text-muted-foreground sm:text-xl sm:leading-8">
+            <p className="max-w-[42rem] leading-normal text-muted-foreground text-lg sm:text-xl sm:leading-8">
               Stop fighting with formatting. Use our AI-powered editor to generate professional, ATS-friendly resumes compiled with LaTeX.
             </p>
 
@@ -60,21 +62,57 @@ export default function Home() {
               </Link>
             </div>
 
-            {/* Mock UI Element */}
-            <div className="mt-16 relative w-full max-w-4xl mx-auto perspective-1000">
-              <div className="relative rounded-xl border border-white/10 bg-black/40 backdrop-blur-xl shadow-2xl p-2 animate-float transform rotate-x-12">
-                <div className="rounded-lg bg-background/50 p-4 h-[300px] md:h-[400px] w-full flex items-center justify-center border border-white/5">
-                  <div className="text-center space-y-4">
-                    <div className="h-20 w-20 bg-primary/20 rounded-full mx-auto flex items-center justify-center animate-pulse">
-                      <FileText className="h-10 w-10 text-primary" />
+            {/* Mock UI Element - Preview of the Editor */}
+            <div className="mt-20 relative w-full max-w-5xl mx-auto">
+              <div className="relative rounded-2xl border border-white/20 bg-gradient-to-b from-white/10 to-white/5 dark:from-white/5 dark:to-black/20 backdrop-blur-xl shadow-2xl overflow-hidden">
+                {/* Mock Editor Header */}
+                <div className="border-b border-white/10 px-6 py-4 flex items-center gap-3">
+                  <div className="flex gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                    <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                    <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
+                  </div>
+                  <div className="flex-1 text-center text-sm text-muted-foreground font-medium">
+                    Resume Editor - Coming Soon
+                  </div>
+                </div>
+
+                {/* Mock Editor Content */}
+                <div className="grid md:grid-cols-2 gap-0 h-[400px]">
+                  {/* Left: Code Editor Mock */}
+                  <div className="border-r border-white/10 bg-black/20 p-6 space-y-3">
+                    <div className="flex items-center gap-2 mb-4">
+                      <FileText className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium">LaTeX Source</span>
                     </div>
-                    <p className="text-muted-foreground">Interactive Editor Preview</p>
+                    <div className="space-y-2 font-mono text-xs">
+                      <div className="h-3 bg-white/10 rounded w-3/4"></div>
+                      <div className="h-3 bg-white/10 rounded w-1/2"></div>
+                      <div className="h-3 bg-white/10 rounded w-5/6"></div>
+                      <div className="h-3 bg-white/10 rounded w-2/3"></div>
+                      <div className="h-3 bg-primary/30 rounded w-4/5"></div>
+                      <div className="h-3 bg-white/10 rounded w-1/2"></div>
+                    </div>
+                  </div>
+
+                  {/* Right: PDF Preview Mock */}
+                  <div className="bg-white/5 p-6 flex items-center justify-center">
+                    <div className="text-center space-y-4">
+                      <div className="h-24 w-24 bg-gradient-to-br from-primary/20 to-purple-500/20 rounded-2xl mx-auto flex items-center justify-center animate-pulse">
+                        <FileText className="h-12 w-12 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Live PDF Preview</p>
+                        <p className="text-xs text-muted-foreground mt-1">Real-time compilation with LaTeX</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
+
               {/* Decorative blobs behind the mock */}
-              <div className="absolute -top-10 -right-10 w-32 h-32 bg-purple-500/30 rounded-full blur-2xl -z-10" />
-              <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-blue-500/30 rounded-full blur-2xl -z-10" />
+              <div className="absolute -top-10 -right-10 w-40 h-40 bg-purple-500/20 rounded-full blur-3xl -z-10"></div>
+              <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-500/20 rounded-full blur-3xl -z-10"></div>
             </div>
           </div>
         </section>
