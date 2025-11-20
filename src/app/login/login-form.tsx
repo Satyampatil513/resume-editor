@@ -27,22 +27,22 @@ export function LoginForm() {
     }
 
     return (
-        <Card className="w-full border-none shadow-2xl bg-white/90 backdrop-blur-sm dark:bg-zinc-900/90">
-            <CardHeader className="text-center">
+        <Card className="w-full border-white/20 shadow-2xl bg-white/80 backdrop-blur-xl dark:bg-black/40 dark:border-white/10">
+            <CardHeader className="text-center space-y-2">
                 <CardTitle className="text-2xl font-bold tracking-tight">Welcome back</CardTitle>
-                <CardDescription>Sign in to access your resume projects</CardDescription>
+                <CardDescription className="text-base">Sign in to access your resume projects</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pb-8">
                 <Button
                     onClick={handleLogin}
-                    className="w-full h-11 text-base font-medium transition-all hover:scale-[1.02]"
-                    variant="outline"
+                    className="w-full h-12 text-base font-medium transition-all hover:scale-[1.02] bg-white hover:bg-gray-50 text-gray-900 border border-gray-200 shadow-sm dark:bg-white/10 dark:text-white dark:border-white/10 dark:hover:bg-white/20"
+                    variant="ghost"
                     disabled={isLoading}
                 >
                     {isLoading ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin text-primary" />
                     ) : (
-                        <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+                        <svg className="mr-3 h-5 w-5" viewBox="0 0 24 24">
                             <path
                                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                                 fill="#4285F4"
@@ -61,7 +61,7 @@ export function LoginForm() {
                             />
                         </svg>
                     )}
-                    Sign in with Google
+                    Continue with Google
                 </Button>
             </CardContent>
         </Card>
