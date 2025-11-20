@@ -40,7 +40,7 @@ export default function Home() {
               v1.0 Now Available
             </div>
 
-            <h1 className="font-heading text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-tight">
+            <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
               Craft the perfect resume with <br />
               <span className="text-gradient">AI & LaTeX Precision</span>
             </h1>
