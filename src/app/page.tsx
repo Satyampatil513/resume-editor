@@ -33,8 +33,8 @@ export default function Home() {
       </header>
 
       <main className="flex-1">
-        <section className="space-y-6 pb-8 pt-12 md:pb-16 md:pt-20 lg:py-40 relative">
-          <div className="container flex max-w-[64rem] flex-col items-center gap-8 text-center relative z-10 mx-auto px-4">
+        <section className="space-y-6 pb-8 pt-6 md:pt-10 lg:pt-16 relative">
+          <div className="container flex max-w-[64rem] flex-col items-center gap-4 md:gap-6 text-center relative z-10 mx-auto px-4">
             <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-sm font-medium text-primary backdrop-blur-sm">
               <span className="flex h-2 w-2 rounded-full bg-primary mr-2 animate-pulse"></span>
               v1.0 Now Available
@@ -45,11 +45,11 @@ export default function Home() {
               <span className="text-gradient">AI & LaTeX Precision</span>
             </h1>
 
-            <p className="max-w-[42rem] leading-normal text-muted-foreground text-lg sm:text-xl sm:leading-8">
+            <p className="max-w-[42rem] leading-normal text-muted-foreground text-base sm:text-lg md:text-xl sm:leading-8">
               Stop fighting with formatting. Use our AI-powered editor to generate professional, ATS-friendly resumes compiled with LaTeX.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 mt-4">
+            <div className="flex flex-col sm:flex-row gap-4 mt-2">
               <Link href="/login">
                 <Button size="lg" className="h-12 px-8 text-lg gap-2 bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 shadow-xl shadow-primary/20 transition-all hover:scale-105">
                   Start Building Free <ArrowRight className="h-5 w-5" />
@@ -63,7 +63,7 @@ export default function Home() {
             </div>
 
             {/* Mock UI Element - Preview of the Editor */}
-            <div className="mt-20 relative w-full max-w-5xl mx-auto">
+            <div className="mt-12 md:mt-16 relative w-full max-w-5xl mx-auto">
               <div className="relative rounded-2xl border border-white/20 bg-gradient-to-b from-white/10 to-white/5 dark:from-white/5 dark:to-black/20 backdrop-blur-xl shadow-2xl overflow-hidden">
                 {/* Mock Editor Header */}
                 <div className="border-b border-white/10 px-6 py-4 flex items-center gap-3">
