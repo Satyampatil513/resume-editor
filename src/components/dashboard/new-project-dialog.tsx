@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Plus, Upload, Loader2 } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 
-export function NewProjectDialog() {
+export function NewProjectDialog({ children }: { children?: React.ReactNode }) {
     const [open, setOpen] = useState(false)
     const [projectName, setProjectName] = useState("")
     const [isUploading, setIsUploading] = useState(false)
@@ -43,10 +43,6 @@ export function NewProjectDialog() {
         setError(null)
 
         try {
-            console.log('Starting upload process...')
-            console.log('Supabase URL present:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
-            console.log('Supabase Anon Key present:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-
             console.log('Starting upload process...')
             console.log('Supabase URL present:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
             console.log('Supabase Anon Key present:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
@@ -145,10 +141,12 @@ export function NewProjectDialog() {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    New Project
-                </Button>
+                {children || (
+                    <Button className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        New Project
+                    </Button>
+                )}
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
