@@ -5,6 +5,7 @@ export interface ComponentItem {
     id: string
     name: string
     icon: React.ReactNode
+    content?: string
 }
 
 const COMPONENTS: ComponentItem[] = [

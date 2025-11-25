@@ -100,7 +100,8 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                         const dynamicComponents: ComponentItem[] = parsedSections.map(section => ({
                             id: section.id,
                             name: section.title,
-                            icon: getSectionIcon(section.title)
+                            icon: getSectionIcon(section.title),
+                            content: section.content
                         }))
                         setComponents(dynamicComponents)
                     }
@@ -199,7 +200,10 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                 <div className="flex-1">
                     <ResizablePanelGroup direction="horizontal">
                         <ResizablePanel defaultSize={30} minSize={20}>
-                            <AIChat selectedSection={selectedSection} />
+                            <AIChat
+                                selectedSection={selectedSection}
+                                components={components}
+                            />
                         </ResizablePanel>
 
                         <ResizableHandle />
