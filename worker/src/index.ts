@@ -1,5 +1,6 @@
 import { Redis } from '@upstash/redis';
 import dotenv from 'dotenv';
+import { compileProject } from './compiler';
 
 dotenv.config();
 
@@ -13,19 +14,25 @@ async function main() {
 
     while (true) {
         try {
-            // Simulate polling - in a real scenario with Upstash HTTP, we might just fetch periodically
-            // or use a stream if supported. For simple queue:
-            // We'll assume a list named 'compile_queue'
-
-            // RPOP is simple for now. 
-            // Note: Upstash HTTP is stateless, so blocking pop (BRPOP) might have timeouts or not be ideal 
-            // depending on the plan. We'll use simple polling with sleep for now.
-
             const jobData = await redis.rpop('compile_queue');
 
             if (jobData) {
-                console.log('Received job:', jobData);
-                // TODO: Process job
+                // Parse job data (handle if it's a string or object)
+                const job = typeof jobData === 'string' ? JSON.parse(jobData) : jobData;
+                console.log('Received job:', job);
+
+                if (job.type === 'compile' && job.payload?.zipUrl) {
+                    try {
+                        console.log(`Processing job ${job.id}...`);
+                        const pdfPath = await compileProject(job.id, job.payload.zipUrl);
+                        console.log(`Job ${job.id} completed. PDF at: ${pdfPath}`);
+                        // TODO: Upload PDF to storage and update DB
+                    } catch (err) {
+                        console.error(`Job ${job.id} failed:`, err);
+                    }
+                } else {
+                    console.log('Invalid job format or type:', job);
+                }
             } else {
                 // No jobs, wait a bit
                 await new Promise((resolve) => setTimeout(resolve, 2000));
