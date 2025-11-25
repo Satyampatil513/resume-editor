@@ -1,0 +1,36 @@
+{
+  "version": 3,
+  "middleware": {
+    "/": {
+      "files": [
+        "server/edge/chunks/Desktop_samarth_resume-editor-1_1c8b1997._.js",
+        "server/edge/chunks/2186b_@supabase_storage-js_dist_module_b95f511b._.js",
+        "server/edge/chunks/2186b_@supabase_auth-js_dist_module_2332b5f6._.js",
+        "server/edge/chunks/2186b_103bd710._.js",
+        "server/edge/chunks/[root-of-the-server]__bb182b12._.js",
+        "server/edge/chunks/turbopack-Desktop_samarth_resume-editor-1_edge-wrapper_06a36446.js"
+      ],
+      "name": "middleware",
+      "page": "/",
+      "matchers": [
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?(?:\\/((?!_next\\/static|_next\\/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*))(\\\\.json)?[\\/#\\?]?$",
+          "originalSource": "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
+        }
+      ],
+      "wasm": [],
+      "assets": [],
+      "env": {
+        "__NEXT_BUILD_ID": "development",
+        "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": "Qa8zi1cqoRKNlcYo0cWp5cb2UFR9JqjsoGRCDc5HH2U=",
+        "__NEXT_PREVIEW_MODE_ID": "00c594f6a8e116f339928e36506fd90c",
+        "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "5fb4436ab5d092c6232d238281b02601cc165ff42e3607fbc2e290177dba0c19",
+        "__NEXT_PREVIEW_MODE_SIGNING_KEY": "b3c18c51822267328d2b3e54475be2a42fcbe658b6f2a38a0f38a610fd6a5752"
+      }
+    }
+  },
+  "sortedMiddleware": [
+    "/"
+  ],
+  "functions": {}
+}

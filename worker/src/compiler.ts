@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import AdmZip from 'adm-zip';
-import { execa } from 'execa';
+import execa from 'execa';
 import { randomUUID } from 'crypto';
 
 const WORK_DIR = path.join(process.cwd(), 'temp_work');
@@ -44,29 +44,38 @@ export async function compileProject(jobId: string, zipUrl: string): Promise<str
             }
         }
 
-        // 3. Compile (Mocked if latexmk is missing, or we can try to run it)
+        // 3. Compile
         console.log(`[${jobId}] Compiling in ${projectRoot}...`);
-        const mainFile = 'main.tex'; // Assumption: main file is main.tex
 
-        // Check if main.tex exists
-        // Note: The sample zip might not have main.tex, so we'll look for ANY .tex file or just proceed if mocking.
-        // For the sample 'starter-workflows', it has no .tex files. So this check will fail if we enforce it.
-        // Since we are mocking, we should be lenient for this test.
-
+        // Check if main.tex exists (or find any .tex)
         const files = await fs.readdir(projectRoot);
         const texFile = files.find(f => f.endsWith('.tex'));
 
         if (!texFile) {
-            console.warn(`[${jobId}] No .tex file found in ${projectRoot}. Proceeding with mock anyway for testing.`);
+            throw new Error(`No .tex file found in ${projectRoot}`);
         }
 
-        // MOCK COMPILATION for now since latexmk is not guaranteed
-        // In a real scenario, we would run:
-        // await execa('latexmk', ['-pdf', '-interaction=nonstopmode', 'main.tex'], { cwd: projectRoot });
+        // Run latexmk
+        // -pdf: Generate PDF
+        // -interaction=nonstopmode: Don't stop on errors
+        // -outdir=.: Output to same directory
+        try {
+            console.log(`[${jobId}] Running latexmk on ${texFile}...`);
+            await execa('latexmk', ['-pdf', '-interaction=nonstopmode', '-outdir=.', texFile!], { cwd: projectRoot });
+        } catch (e: any) {
+            console.error(`[${jobId}] latexmk failed:`, e.message);
+            if (e.stdout) console.error(`[${jobId}] stdout:\n`, e.stdout);
+            if (e.stderr) console.error(`[${jobId}] stderr:\n`, e.stderr);
+            throw new Error('Compilation failed');
+        }
 
-        console.log(`[${jobId}] Mocking compilation (latexmk not installed locally)`);
-        const pdfPath = path.join(projectRoot, 'output.pdf');
-        await fs.writeFile(pdfPath, '% PDF MOCK CONTENT'); // Create a dummy PDF
+        const pdfPath = path.join(projectRoot, texFile!.replace('.tex', '.pdf'));
+
+        if (!await fs.pathExists(pdfPath)) {
+            throw new Error('PDF was not generated');
+        }
+
+        console.log(`[${jobId}] PDF generated at ${pdfPath}`);
 
         // 4. Return result path
         return pdfPath;
