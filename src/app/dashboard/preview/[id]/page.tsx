@@ -5,10 +5,11 @@ import { useParams, useRouter } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, FileCode, MessageSquare, Play } from "lucide-react"
+import { ArrowLeft, FileCode, MessageSquare, Play, Layers } from "lucide-react"
 import { FileTree } from "@/components/preview/file-tree"
 import { PDFViewer } from "@/components/preview/pdf-viewer"
 import { AIChat } from "@/components/preview/ai-chat"
+import { ComponentList } from "@/components/editor/component-list"
 import { Loader2 } from "lucide-react"
 
 export default function PreviewPage() {
@@ -16,7 +17,7 @@ export default function PreviewPage() {
     const router = useRouter()
     const [loading, setLoading] = useState(true)
     const [project, setProject] = useState<any>(null)
-    const [files, setFiles] = useState<any[]>([]) // Mock files for now
+    const [files, setFiles] = useState<any[]>([])
 
     useEffect(() => {
         loadProject()
@@ -25,6 +26,12 @@ export default function PreviewPage() {
     const loadProject = async () => {
         try {
             const supabase = createClient()
+
+            // Get current user
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) throw new Error('Not authenticated')
+
+            // Load project details
             const { data, error } = await supabase
                 .from('projects')
                 .select('*')
@@ -34,17 +41,26 @@ export default function PreviewPage() {
             if (error) throw error
             setProject(data)
 
-            // Mock loading files (in real app, we'd fetch extracted files)
-            setFiles([
-                { name: 'main.tex', type: 'file' },
-                { name: 'resume.cls', type: 'file' },
-                {
-                    name: 'sections', type: 'folder', children: [
-                        { name: 'experience.tex', type: 'file' },
-                        { name: 'education.tex', type: 'file' }
-                    ]
-                }
-            ])
+            // Load files from Storage
+            const { data: filesData, error: filesError } = await supabase
+                .storage
+                .from('resume-files')
+                .list(`${user.id}/${params.id}`)
+
+            if (filesError) {
+                console.error('Error loading files:', filesError)
+                setFiles([])
+            } else {
+                // Transform storage files to FileNode format
+                const fileNodes: any[] = filesData?.map(file => ({
+                    id: file.id,
+                    name: file.name,
+                    type: 'file'
+                })) || []
+
+                setFiles(fileNodes)
+            }
+
         } catch (error) {
             console.error('Error:', error)
         } finally {
@@ -87,12 +103,23 @@ export default function PreviewPage() {
                 <ResizablePanelGroup direction="horizontal">
                     {/* File Tree Sidebar */}
                     <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
-                        <div className="h-full border-r bg-muted/10 p-4">
-                            <div className="flex items-center gap-2 mb-4 text-sm font-semibold text-muted-foreground">
-                                <FileCode className="h-4 w-4" />
-                                Project Files
+                        <div className="h-full border-r bg-muted/10 flex flex-col">
+                            <div className="p-4 border-b">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                                    <FileCode className="h-4 w-4" />
+                                    Project Files
+                                </div>
                             </div>
-                            <FileTree files={files} />
+                            <div className="p-2 overflow-y-auto flex-1 border-b">
+                                <FileTree files={files} />
+                            </div>
+                            <div className="p-4 bg-muted/5">
+                                <h2 className="font-semibold text-sm flex items-center gap-2 mb-2">
+                                    <Layers className="h-4 w-4" />
+                                    Components
+                                </h2>
+                                <ComponentList />
+                            </div>
                         </div>
                     </ResizablePanel>
 

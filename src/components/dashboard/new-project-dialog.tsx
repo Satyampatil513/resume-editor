@@ -82,20 +82,44 @@ export function NewProjectDialog({ children }: { children?: React.ReactNode }) {
 
             if (projectError) throw projectError
 
-            // Upload zip file
-            const filePath = `${user.id}/${project.id}/${zipFile.name}`
-            const { error: uploadError } = await supabase.storage
-                .from('resume-files')
-                .upload(filePath, zipFile)
+            // Unzip and upload files
+            const jszip = (await import('jszip')).default
+            const zip = await jszip.loadAsync(zipFile)
 
-            if (uploadError) throw uploadError
+            const uploadPromises: Promise<any>[] = []
 
-            // Create artifact record
+            // Also upload the original zip as backup
+            const zipPath = `${user.id}/${project.id}/${zipFile.name}`
+            uploadPromises.push(
+                supabase.storage
+                    .from('resume-files')
+                    .upload(zipPath, zipFile)
+            )
+
+            // Iterate through files in zip
+            zip.forEach((relativePath, zipEntry) => {
+                if (!zipEntry.dir) {
+                    uploadPromises.push(async function () {
+                        const content = await zipEntry.async('blob')
+                        const filePath = `${user.id}/${project.id}/${relativePath}`
+                        return supabase.storage
+                            .from('resume-files')
+                            .upload(filePath, content, {
+                                contentType: 'text/plain', // Default to text/plain for tex files, or auto-detect if needed
+                                upsert: true
+                            })
+                    }())
+                }
+            })
+
+            await Promise.all(uploadPromises)
+
+            // Create artifact record for the zip
             const { error: artifactError } = await supabase
                 .from('artifacts')
                 .insert({
                     project_id: project.id,
-                    storage_path: filePath,
+                    storage_path: zipPath,
                     file_type: 'zip',
                     user_id: user.id
                 })
@@ -113,7 +137,7 @@ export function NewProjectDialog({ children }: { children?: React.ReactNode }) {
 
             if (jobError) throw jobError
 
-            router.push(`/dashboard/preview/${project.id}`)
+            router.push(`/dashboard/editor/${project.id}`)
         } catch (error: any) {
             console.error('Error uploading zip:', error)
             setError(error.message || 'Failed to upload. Please try again.')

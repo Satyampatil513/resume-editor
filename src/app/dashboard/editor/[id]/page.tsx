@@ -1,5 +1,6 @@
 import { ResumeEditor } from "./resume-editor"
 
-export default function EditorPage({ params }: { params: { id: string } }) {
-    return <ResumeEditor projectId={params.id} />
+export default async function EditorPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params
+    return <ResumeEditor projectId={id} />
 }
