@@ -5,14 +5,17 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
 import { ResumeData } from "@/types/database"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card } from "@/components/ui/card"
-import { ArrowLeft, Save, Download, Eye, Code } from "lucide-react"
-import { PersonalInfoEditor } from "@/components/editor/personal-info-editor"
-import { ExperienceEditor } from "@/components/editor/experience-editor"
-import { EducationEditor } from "@/components/editor/education-editor"
-import { SkillsEditor } from "@/components/editor/skills-editor"
+import { ArrowLeft, Save, Download, Sidebar as SidebarIcon, PanelLeftClose, PanelLeftOpen, Layers, User, Briefcase, GraduationCap, Code, FolderGit2, Trophy, FileText } from "lucide-react"
 import { ResumePreview } from "@/components/editor/resume-preview"
+import { AIChat } from "@/components/preview/ai-chat"
+import { FileTree, FileNode } from "@/components/preview/file-tree"
+import { ComponentList, ComponentItem } from "@/components/editor/component-list"
+import { PDFViewer } from "@/components/preview/pdf-viewer"
+import {
+    ResizableHandle,
+    ResizablePanel,
+    ResizablePanelGroup,
+} from "@/components/ui/resizable"
 
 interface ResumeEditorProps {
     projectId: string
@@ -22,16 +25,34 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
     const [resumeData, setResumeData] = useState<ResumeData>({})
     const [projectName, setProjectName] = useState("")
     const [isSaving, setIsSaving] = useState(false)
-    const [showPreview, setShowPreview] = useState(true)
+    const [showFileTree, setShowFileTree] = useState(true)
+    const [selectedSection, setSelectedSection] = useState<string | null>(null)
+    const [files, setFiles] = useState<FileNode[]>([])
+    const [components, setComponents] = useState<ComponentItem[]>([])
     const router = useRouter()
 
     useEffect(() => {
         loadProject()
     }, [projectId])
 
+    const getSectionIcon = (title: string) => {
+        const t = title.toLowerCase()
+        if (t.includes('education')) return <GraduationCap className="h-4 w-4" />
+        if (t.includes('experience') || t.includes('work') || t.includes('employment')) return <Briefcase className="h-4 w-4" />
+        if (t.includes('skill') || t.includes('technolog')) return <Code className="h-4 w-4" />
+        if (t.includes('project')) return <FolderGit2 className="h-4 w-4" />
+        if (t.includes('achievement') || t.includes('award') || t.includes('honor')) return <Trophy className="h-4 w-4" />
+        if (t.includes('personal') || t.includes('contact')) return <User className="h-4 w-4" />
+        return <FileText className="h-4 w-4" />
+    }
+
     const loadProject = async () => {
         try {
             const supabase = createClient()
+
+            // Get current user
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) throw new Error('Not authenticated')
 
             // Load project
             const { data: project, error: projectError } = await supabase
@@ -43,19 +64,48 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
             if (projectError) throw projectError
             setProjectName(project.name)
 
-            // Load resume content
-            const { data: content, error: contentError } = await supabase
-                .from('resume_content')
-                .select('*')
-                .eq('project_id', projectId)
-                .single()
+            // Load files from Storage
+            const { data: filesData, error: filesError } = await supabase
+                .storage
+                .from('resume-files')
+                .list(`${user.id}/${projectId}`)
 
-            if (contentError && contentError.code !== 'PGRST116') {
-                throw contentError
-            }
+            if (filesError) {
+                console.error('Error loading files:', filesError)
+                setFiles([])
+            } else {
+                // Transform storage files to FileNode format
+                const fileNodes: FileNode[] = filesData?.map(file => ({
+                    id: file.id || file.name,
+                    name: file.name,
+                    type: file.id ? 'file' : 'folder'
+                })) || []
 
-            if (content) {
-                setResumeData(content.content as ResumeData)
+                setFiles(fileNodes)
+
+                // Try to find and parse main.tex
+                const mainFile = fileNodes.find(f => f.name === 'main.tex')
+                if (mainFile) {
+                    const { data: fileContent, error: downloadError } = await supabase
+                        .storage
+                        .from('resume-files')
+                        .download(`${user.id}/${projectId}/main.tex`)
+
+                    if (fileContent) {
+                        const text = await fileContent.text()
+                        const { parseLatexSections } = await import('@/lib/latex-parser')
+                        const parsedSections = parseLatexSections(text)
+
+                        // Map parsed sections to component structure
+                        const dynamicComponents: ComponentItem[] = parsedSections.map(section => ({
+                            id: section.id,
+                            name: section.title,
+                            icon: getSectionIcon(section.title),
+                            content: section.content
+                        }))
+                        setComponents(dynamicComponents)
+                    }
+                }
             }
         } catch (error) {
             console.error('Error loading project:', error)
@@ -64,40 +114,16 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
     }
 
     const saveResume = async () => {
-        setIsSaving(true)
-        try {
-            const supabase = createClient()
-
-            const { error } = await supabase
-                .from('resume_content')
-                .upsert({
-                    project_id: projectId,
-                    content: resumeData
-                }, {
-                    onConflict: 'project_id'
-                })
-
-            if (error) throw error
-        } catch (error) {
-            console.error('Error saving resume:', error)
-            alert('Failed to save resume')
-        } finally {
-            setIsSaving(false)
-        }
-    }
-
-    const updateResumeData = (section: keyof ResumeData, data: any) => {
-        setResumeData(prev => ({
-            ...prev,
-            [section]: data
-        }))
+        // Saving logic would need to update the actual .tex file in storage
+        // For now, we'll just show a toast or alert
+        alert("Saving functionality for LaTeX files will be implemented soon.")
     }
 
     return (
-        <div className="h-screen flex flex-col bg-background">
+        <div className="h-screen flex flex-col bg-background overflow-hidden">
             {/* Header */}
-            <div className="border-b bg-card">
-                <div className="flex items-center justify-between px-6 py-4">
+            <div className="border-b bg-card shrink-0">
+                <div className="flex items-center justify-between px-4 py-3">
                     <div className="flex items-center gap-4">
                         <Button
                             variant="ghost"
@@ -106,21 +132,20 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                         >
                             <ArrowLeft className="h-5 w-5" />
                         </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setShowFileTree(!showFileTree)}
+                            title={showFileTree ? "Hide File Tree" : "Show File Tree"}
+                        >
+                            {showFileTree ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
+                        </Button>
                         <div>
-                            <h1 className="text-xl font-semibold">{projectName}</h1>
-                            <p className="text-sm text-muted-foreground">Resume Editor</p>
+                            <h1 className="text-lg font-semibold">{projectName}</h1>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowPreview(!showPreview)}
-                        >
-                            {showPreview ? <Code className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
-                            {showPreview ? 'Hide Preview' : 'Show Preview'}
-                        </Button>
                         <Button
                             variant="outline"
                             size="sm"
@@ -138,61 +163,60 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                 </div>
             </div>
 
-            {/* Editor Content */}
-            <div className="flex-1 overflow-hidden">
-                <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-0">
-                    {/* Editor Panel */}
-                    <div className="overflow-y-auto border-r">
-                        <div className="p-6">
-                            <Tabs defaultValue="personal" className="w-full">
-                                <TabsList className="grid w-full grid-cols-4">
-                                    <TabsTrigger value="personal">Personal</TabsTrigger>
-                                    <TabsTrigger value="experience">Experience</TabsTrigger>
-                                    <TabsTrigger value="education">Education</TabsTrigger>
-                                    <TabsTrigger value="skills">Skills</TabsTrigger>
-                                </TabsList>
+            {/* Main Content */}
+            <div className="flex-1 flex overflow-hidden">
+                {/* File Tree Sidebar */}
+                {showFileTree && (
+                    <div className="w-64 border-r bg-muted/10 flex flex-col">
+                        <div className="p-4 border-b">
+                            <h2 className="font-semibold text-sm flex items-center gap-2">
+                                <SidebarIcon className="h-4 w-4" />
+                                Project Files
+                            </h2>
+                        </div>
+                        <div className="p-2 overflow-y-auto flex-1 border-b">
+                            <FileTree
+                                files={files}
+                                onSelect={(node) => setSelectedSection(node.id)}
+                                selectedId={selectedSection}
+                            />
+                        </div>
 
-                                <TabsContent value="personal" className="mt-6">
-                                    <PersonalInfoEditor
-                                        data={resumeData.personal}
-                                        onChange={(data) => updateResumeData('personal', data)}
-                                    />
-                                </TabsContent>
-
-                                <TabsContent value="experience" className="mt-6">
-                                    <ExperienceEditor
-                                        data={resumeData.experience || []}
-                                        onChange={(data) => updateResumeData('experience', data)}
-                                    />
-                                </TabsContent>
-
-                                <TabsContent value="education" className="mt-6">
-                                    <EducationEditor
-                                        data={resumeData.education || []}
-                                        onChange={(data) => updateResumeData('education', data)}
-                                    />
-                                </TabsContent>
-
-                                <TabsContent value="skills" className="mt-6">
-                                    <SkillsEditor
-                                        data={resumeData.skills || []}
-                                        onChange={(data) => updateResumeData('skills', data)}
-                                    />
-                                </TabsContent>
-                            </Tabs>
+                        <div className="p-4 border-b bg-muted/5">
+                            <h2 className="font-semibold text-sm flex items-center gap-2 mb-2">
+                                <Layers className="h-4 w-4" />
+                                Components
+                            </h2>
+                            <ComponentList
+                                onSelect={(id) => setSelectedSection(id)}
+                                selectedId={selectedSection}
+                                items={components.length > 0 ? components : undefined}
+                            />
                         </div>
                     </div>
+                )}
 
-                    {/* Preview Panel */}
-                    {showPreview && (
-                        <div className="overflow-y-auto bg-muted/30">
-                            <div className="p-6">
-                                <Card className="max-w-[210mm] mx-auto bg-white dark:bg-card">
-                                    <ResumePreview data={resumeData} />
-                                </Card>
+                {/* Resizable Panels: Chat & Preview */}
+                <div className="flex-1">
+                    <ResizablePanelGroup direction="horizontal">
+                        <ResizablePanel defaultSize={30} minSize={20}>
+                            <AIChat
+                                selectedSection={selectedSection}
+                                components={components}
+                            />
+                        </ResizablePanel>
+
+                        <ResizableHandle />
+
+                        <ResizablePanel defaultSize={70} minSize={30}>
+                            <div className="h-full overflow-y-auto bg-muted/30 p-8">
+                                {/* Use PDFViewer for LaTeX projects */}
+                                <div className="max-w-[210mm] mx-auto shadow-lg h-full">
+                                    <PDFViewer />
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        </ResizablePanel>
+                    </ResizablePanelGroup>
                 </div>
             </div>
         </div>
