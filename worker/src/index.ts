@@ -23,12 +23,52 @@ async function main() {
 
                 if (job.type === 'compile' && job.payload?.zipUrl) {
                     try {
-                        console.log(`Processing job ${job.id}...`);
+                        console.log(`Processing compile job ${job.id}...`);
                         const pdfPath = await compileProject(job.id, job.payload.zipUrl);
                         console.log(`Job ${job.id} completed. PDF at: ${pdfPath}`);
                         // TODO: Upload PDF to storage and update DB
                     } catch (err) {
                         console.error(`Job ${job.id} failed:`, err);
+                    }
+                } else if (job.type === 'check_syntax' && job.payload?.content) {
+                    try {
+                        console.log(`Processing syntax check job ${job.id}...`);
+                        const { checkSyntax } = await import('./syntax-checker');
+                        const errors = await checkSyntax(job.id, job.payload.content);
+                        console.log(`Job ${job.id} completed. Found ${errors.length} issues.`);
+
+                        // Store result in Redis for retrieval
+                        // Key: job_result:{jobId}
+                        await redis.set(`job_result:${job.id}`, JSON.stringify({
+                            status: 'completed',
+                            result: errors
+                        }), { ex: 300 }); // Expire in 5 minutes
+
+                    } catch (err) {
+                        console.error(`Job ${job.id} failed:`, err);
+                        await redis.set(`job_result:${job.id}`, JSON.stringify({
+                            status: 'failed',
+                            error: err instanceof Error ? err.message : 'Unknown error'
+                        }), { ex: 300 });
+                    }
+                } else if (job.type === 'compile_content' && job.payload?.content) {
+                    try {
+                        console.log(`Processing compile content job ${job.id}...`);
+                        const { compileLatexContent } = await import('./compiler');
+                        const pdfBase64 = await compileLatexContent(job.id, job.payload.content);
+                        console.log(`Job ${job.id} completed. PDF generated.`);
+
+                        await redis.set(`job_result:${job.id}`, JSON.stringify({
+                            status: 'completed',
+                            result: pdfBase64
+                        }), { ex: 300 });
+
+                    } catch (err) {
+                        console.error(`Job ${job.id} failed:`, err);
+                        await redis.set(`job_result:${job.id}`, JSON.stringify({
+                            status: 'failed',
+                            error: err instanceof Error ? err.message : 'Unknown error'
+                        }), { ex: 300 });
                     }
                 } else {
                     console.log('Invalid job format or type:', job);
