@@ -15,9 +15,10 @@ interface Message {
 interface AIChatProps {
     selectedSection?: string | null
     components?: ComponentItem[]
+    onCodeUpdate?: (code: string) => void
 }
 
-export function AIChat({ selectedSection, components = [] }: AIChatProps) {
+export function AIChat({ selectedSection, components = [], onCodeUpdate }: AIChatProps) {
     const [messages, setMessages] = useState<Message[]>([
         {
             id: '1',
@@ -80,7 +81,7 @@ export function AIChat({ selectedSection, components = [] }: AIChatProps) {
         setAttachedComponents(attachedComponents.filter(c => c.id !== id))
     }
 
-    const sendMessage = () => {
+    const sendMessage = async () => {
         if (!input.trim() && attachedComponents.length === 0) return
 
         // Construct message with context
@@ -98,32 +99,45 @@ export function AIChat({ selectedSection, components = [] }: AIChatProps) {
             content: fullContent
         }
 
-        // LOGGING FOR VERIFICATION
-        console.log("🚀 SENDING MESSAGE TO AI:", {
-            userMessage: input,
-            attachedContext: attachedComponents.map(c => ({ name: c.name, contentPreview: c.content?.substring(0, 50) + '...' })),
-            fullPayload: newMessage.content
-        })
-
-        setMessages([...messages, newMessage])
+        setMessages(prev => [...prev, newMessage])
         setInput("")
 
-        // Capture current attachments for the simulation before clearing
+        // Capture current attachments before clearing
         const currentAttachments = [...attachedComponents]
         setAttachedComponents([])
 
-        // Simulate AI response
-        setTimeout(() => {
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: [...messages, newMessage],
+                    systemPrompt: "You are an expert LaTeX resume editor. Help the user edit their resume. When they provide context, use it to give specific advice or code snippets."
+                })
+            })
+
+            if (!response.ok) throw new Error('Failed to send message')
+
+            const data = await response.json()
+
             const contextMsg = currentAttachments.length > 0
-                ? `\n\nI received context for: **${currentAttachments.map(c => c.name).join(', ')}**`
+                ? `\n\n(Context used: ${currentAttachments.map(c => c.name).join(', ')})`
                 : ""
 
             setMessages(prev => [...prev, {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: `I'm processing your request.${contextMsg}\n\n(This is a demo response)`
+                content: data.content + contextMsg
             }])
-        }, 1000)
+
+        } catch (error) {
+            console.error('Chat error:', error)
+            setMessages(prev => [...prev, {
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                content: "Sorry, I encountered an error processing your request. Please try again."
+            }])
+        }
     }
 
     return (
@@ -136,7 +150,7 @@ export function AIChat({ selectedSection, components = [] }: AIChatProps) {
                 <p className="text-xs text-muted-foreground">Type @ to attach sections</p>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
                 {messages.map((message) => (
                     <div
                         key={message.id}

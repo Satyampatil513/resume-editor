@@ -8,6 +8,7 @@ export interface ResumeSection {
 
 export const parseLatexSections = (latexContent: string): ResumeSection[] => {
     const sections: ResumeSection[] = []
+    const usedIds = new Set<string>()
     const lines = latexContent.split('\n')
 
     let currentSection: ResumeSection | null = null
@@ -16,6 +17,9 @@ export const parseLatexSections = (latexContent: string): ResumeSection[] => {
     const sectionRegex = /\\section\*?\{([^}]+)\}/
 
     lines.forEach((line, index) => {
+        // Ignore comments
+        if (line.trim().startsWith('%')) return
+
         const match = line.match(sectionRegex)
 
         if (match) {
@@ -28,8 +32,21 @@ export const parseLatexSections = (latexContent: string): ResumeSection[] => {
 
             // Start new section
             const title = match[1]
+            let baseId = title.toLowerCase().replace(/\s+/g, '-')
+            let id = baseId
+            let counter = 1
+
+            // Ensure unique ID
+            while (usedIds.has(id)) {
+                id = `${baseId}-${counter}`
+                counter++
+            }
+            usedIds.add(id)
+
+            console.log(`[LatexParser] Parsed section: "${title}" -> ID: "${id}"`)
+
             currentSection = {
-                id: title.toLowerCase().replace(/\s+/g, '-'),
+                id: id,
                 title: title,
                 content: '',
                 startLine: index,

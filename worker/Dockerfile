@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     texlive-latex-extra \
     texlive-fonts-extra \
     latexmk \
+    chktex \
     make \
     && rm -rf /var/lib/apt/lists/*
 

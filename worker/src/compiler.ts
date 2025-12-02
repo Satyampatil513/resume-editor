@@ -60,10 +60,10 @@ export async function compileProject(jobId: string, zipUrl: string): Promise<str
         // -interaction=nonstopmode: Don't stop on errors
         // -outdir=.: Output to same directory
         try {
-            console.log(`[${jobId}] Running latexmk on ${texFile}...`);
-            await execa('latexmk', ['-pdf', '-interaction=nonstopmode', '-outdir=.', texFile!], { cwd: projectRoot });
+            console.log(`[${jobId}] Running pdflatex on ${texFile}...`);
+            await execa('pdflatex', ['-interaction=nonstopmode', '-output-directory=.', texFile!], { cwd: projectRoot });
         } catch (e: any) {
-            console.error(`[${jobId}] latexmk failed:`, e.message);
+            console.error(`[${jobId}] pdflatex failed:`, e.message);
             if (e.stdout) console.error(`[${jobId}] stdout:\n`, e.stdout);
             if (e.stderr) console.error(`[${jobId}] stderr:\n`, e.stderr);
             throw new Error('Compilation failed');
@@ -83,6 +83,47 @@ export async function compileProject(jobId: string, zipUrl: string): Promise<str
     } catch (error) {
         console.error(`[${jobId}] Compilation failed:`, error);
         throw error;
+    }
+}
+
+export async function compileLatexContent(jobId: string, content: string): Promise<string> {
+    const runId = randomUUID();
+    const runDir = path.join(WORK_DIR, runId);
+
+    try {
+        console.log(`[${jobId}] Starting content compilation in ${runDir}`);
+        await fs.ensureDir(runDir);
+
+        const texPath = path.join(runDir, 'main.tex');
+        await fs.writeFile(texPath, content);
+
+        try {
+            console.log(`[${jobId}] Running pdflatex on main.tex...`);
+            // Run pdflatex twice to resolve references/page numbers if needed
+            // --enable-installer: Allow MiKTeX to install missing packages
+            await execa('pdflatex', ['-interaction=nonstopmode', '-output-directory=.', '--enable-installer', 'main.tex'], { cwd: runDir });
+        } catch (e: any) {
+            console.error(`[${jobId}] pdflatex failed:`, e.message);
+            if (e.stdout) console.error(`[${jobId}] stdout:\n`, e.stdout);
+            throw new Error('Compilation failed');
+        }
+
+        const pdfPath = path.join(runDir, 'main.pdf');
+        if (!await fs.pathExists(pdfPath)) {
+            throw new Error('PDF was not generated');
+        }
+
+        console.log(`[${jobId}] PDF generated at ${pdfPath}`);
+
+        // Read PDF as base64
+        const pdfBuffer = await fs.readFile(pdfPath);
+        return pdfBuffer.toString('base64');
+
+    } catch (error) {
+        console.error(`[${jobId}] Compilation failed:`, error);
+        throw error;
+    } finally {
+        await fs.remove(runDir);
     }
 }
 
