@@ -56,10 +56,12 @@ export const parseLatexSections = (latexContent: string): ResumeSection[] => {
     })
 
     // Push the last section
+    // Push the last section
     if (currentSection) {
-        currentSection.endLine = lines.length - 1
-        currentSection.content = lines.slice(currentSection.startLine).join('\n')
-        sections.push(currentSection)
+        const section = currentSection as ResumeSection
+        section.endLine = lines.length - 1
+        section.content = lines.slice(section.startLine).join('\n')
+        sections.push(section)
     }
 
     return sections
