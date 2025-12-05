@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
 import { ResumeData } from "@/types/database"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Save, Download, Sidebar as SidebarIcon, PanelLeftClose, PanelLeftOpen, Layers, User, Briefcase, GraduationCap, Code, FolderGit2, Trophy, FileText, RefreshCw } from "lucide-react"
+import { ArrowLeft, Save, Download, Sidebar as SidebarIcon, PanelLeftClose, PanelLeftOpen, Layers, User, Briefcase, GraduationCap, Code, FolderGit2, Trophy, FileText, RefreshCw, Wand2, AlertTriangle } from "lucide-react"
 import { ResumePreview } from "@/components/editor/resume-preview"
 import { AIChat } from "@/components/preview/ai-chat"
 import { FileTree, FileNode } from "@/components/preview/file-tree"
@@ -32,6 +32,10 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
     const [isCheckingSyntax, setIsCheckingSyntax] = useState(false)
     const [isCompiling, setIsCompiling] = useState(false)
     const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+    const [compileError, setCompileError] = useState<string | null>(null)
+    const [compileLogs, setCompileLogs] = useState<string | null>(null)
+    const [isFixing, setIsFixing] = useState(false)
+    const [latexCode, setLatexCode] = useState<string>("")
     const router = useRouter()
 
     useEffect(() => {
@@ -96,6 +100,7 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
 
                     if (fileContent) {
                         const text = await fileContent.text()
+                        setLatexCode(text) // Store raw code
                         const { parseLatexSections } = await import('@/lib/latex-parser')
                         const parsedSections = parseLatexSections(text)
 
@@ -169,7 +174,74 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
         }
     }
 
-    const compilePreview = async () => {
+    const autoFix = async (logs?: string, code?: string) => {
+        const logsToUse = logs || compileLogs
+        if (!logsToUse) return
+
+        setIsFixing(true)
+        try {
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) throw new Error('Not authenticated')
+
+            let currentCode = code
+            if (!currentCode) {
+                // Get current content again to be safe
+                const { data: fileContent } = await supabase
+                    .storage
+                    .from('resume-files')
+                    .download(`${user.id}/${projectId}/main.tex`)
+
+                if (!fileContent) throw new Error('Could not download main.tex')
+                currentCode = await fileContent.text()
+            }
+
+            // Call Fixer API
+            const response = await fetch('/api/fix-latex', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    code: currentCode,
+                    logs: logsToUse
+                })
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to fix code')
+            }
+
+            // Update the file in Supabase
+            const { error: uploadError } = await supabase
+                .storage
+                .from('resume-files')
+                .upload(`${user.id}/${projectId}/main.tex`, data.fixedCode, {
+                    upsert: true,
+                    contentType: 'text/x-tex'
+                })
+
+            if (uploadError) throw uploadError
+
+            // Update local state
+            setLatexCode(data.fixedCode)
+
+            // Clear errors and re-compile
+            setCompileError(null)
+            setCompileLogs(null)
+
+            // Re-compile (pass false to prevent infinite loop if fix fails)
+            await compilePreview(false)
+
+        } catch (error: any) {
+            console.error('Auto-fix failed:', error)
+            setCompileError(`Auto-fix failed: ${error.message}`)
+        } finally {
+            setIsFixing(false)
+        }
+    }
+
+    const compilePreview = async (shouldAutoFix: boolean | any = true) => {
         setIsCompiling(true)
         try {
             const supabase = createClient()
@@ -192,11 +264,28 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
 
             if (!response.ok) {
                 const errorData = await response.json()
+                // Set error and logs for the UI
+                setCompileError(errorData.error || 'Compilation failed')
+                const logs = errorData.logs || null
+                setCompileLogs(logs) // Capture logs if available
+
+                // Auto-fix if enabled and logs are present
+                if (logs && shouldAutoFix !== false) {
+                    console.log("Compilation failed, attempting auto-fix...")
+                    setCompileError("Compilation failed. Attempting to auto-fix with AI...")
+                    await autoFix(logs, text)
+                    return
+                }
+
                 throw new Error(errorData.error || 'Compilation failed')
             }
 
             const data = await response.json()
             if (data.pdf) {
+                // Clear errors on success
+                setCompileError(null)
+                setCompileLogs(null)
+
                 // Create a data URI for the PDF
                 // #toolbar=0: Hides the toolbar
                 // #navpanes=0: Hides the sidebar (thumbnails)
@@ -207,7 +296,7 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
 
         } catch (error: any) {
             console.error('Compilation error:', error)
-            alert(`Compilation failed: ${error.message}`)
+            // alert(`Compilation failed: ${error.message}`)
         } finally {
             setIsCompiling(false)
         }
@@ -315,11 +404,25 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                             <AIChat
                                 selectedSection={selectedSection}
                                 components={components}
+                                currentCode={latexCode}
                                 onCodeUpdate={async (newCode) => {
-                                    // Here we would update the main.tex content
-                                    // For now, we'll just alert, but ideally we update Supabase and then refresh
-                                    console.log("AI updated code:", newCode)
-                                    // TODO: Implement update logic
+                                    console.log("AI updated code")
+                                    setLatexCode(newCode)
+
+                                    // Update Supabase
+                                    const supabase = createClient()
+                                    const { data: { user } } = await supabase.auth.getUser()
+                                    if (user) {
+                                        await supabase.storage
+                                            .from('resume-files')
+                                            .upload(`${user.id}/${projectId}/main.tex`, newCode, {
+                                                upsert: true,
+                                                contentType: 'text/x-tex'
+                                            })
+
+                                        // Refresh preview
+                                        await compilePreview()
+                                    }
                                 }}
                             />
                         </ResizablePanel>
@@ -331,6 +434,31 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                                 {/* Use PDFViewer for LaTeX projects */}
                                 <div className="h-full w-full">
                                     <PDFViewer pdfUrl={pdfUrl} isLoading={isCompiling} />
+                                    {compileError && (
+                                        <div className="absolute bottom-4 right-4 max-w-md bg-destructive/10 border border-destructive/20 p-4 rounded-lg shadow-lg backdrop-blur-sm">
+                                            <div className="flex items-start gap-3">
+                                                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                                                <div className="flex-1">
+                                                    <h3 className="font-semibold text-destructive mb-1">Compilation Failed</h3>
+                                                    <p className="text-xs text-destructive/80 mb-3 font-mono max-h-20 overflow-y-auto">
+                                                        {compileError}
+                                                    </p>
+                                                    {compileLogs && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="destructive"
+                                                            onClick={() => autoFix()}
+                                                            disabled={isFixing}
+                                                            className="w-full"
+                                                        >
+                                                            <Wand2 className={`h-4 w-4 mr-2 ${isFixing ? 'animate-spin' : ''}`} />
+                                                            {isFixing ? 'Fixing with AI...' : 'Auto-Fix with AI'}
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </ResizablePanel>

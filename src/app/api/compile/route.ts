@@ -39,7 +39,10 @@ export async function POST(req: NextRequest) {
                 const parsedResult = typeof result === 'string' ? JSON.parse(result) : result;
 
                 if (parsedResult.status === 'failed') {
-                    return NextResponse.json({ error: parsedResult.error }, { status: 500 });
+                    return NextResponse.json({
+                        error: parsedResult.error,
+                        logs: parsedResult.logs
+                    }, { status: 500 });
                 }
 
                 return NextResponse.json({ pdf: parsedResult.result });

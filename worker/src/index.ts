@@ -63,11 +63,12 @@ async function main() {
                             result: pdfBase64
                         }), { ex: 300 });
 
-                    } catch (err) {
+                    } catch (err: any) {
                         console.error(`Job ${job.id} failed:`, err);
                         await redis.set(`job_result:${job.id}`, JSON.stringify({
                             status: 'failed',
-                            error: err instanceof Error ? err.message : 'Unknown error'
+                            error: err.message || 'Unknown error',
+                            logs: err.logs // Include the captured logs
                         }), { ex: 300 });
                     }
                 } else {

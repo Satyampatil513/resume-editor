@@ -15,10 +15,11 @@ interface Message {
 interface AIChatProps {
     selectedSection?: string | null
     components?: ComponentItem[]
+    currentCode?: string
     onCodeUpdate?: (code: string) => void
 }
 
-export function AIChat({ selectedSection, components = [], onCodeUpdate }: AIChatProps) {
+export function AIChat({ selectedSection, components = [], currentCode, onCodeUpdate }: AIChatProps) {
     const [messages, setMessages] = useState<Message[]>([
         {
             id: '1',
@@ -112,6 +113,7 @@ export function AIChat({ selectedSection, components = [], onCodeUpdate }: AICha
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     messages: [...messages, newMessage],
+                    currentCode: currentCode, // Pass current code for context
                     systemPrompt: "You are an expert LaTeX resume editor. Help the user edit their resume. When they provide context, use it to give specific advice or code snippets."
                 })
             })
@@ -120,15 +122,34 @@ export function AIChat({ selectedSection, components = [], onCodeUpdate }: AICha
 
             const data = await response.json()
 
-            const contextMsg = currentAttachments.length > 0
-                ? `\n\n(Context used: ${currentAttachments.map(c => c.name).join(', ')})`
-                : ""
+            if (data.type === 'update_code') {
+                // Handle code update
+                if (onCodeUpdate) {
+                    onCodeUpdate(data.content)
+                    setMessages(prev => [...prev, {
+                        id: (Date.now() + 1).toString(),
+                        role: 'assistant',
+                        content: `I've updated your resume code. ${data.explanation || ''}`
+                    }])
+                } else {
+                    setMessages(prev => [...prev, {
+                        id: (Date.now() + 1).toString(),
+                        role: 'assistant',
+                        content: `I wanted to update the code, but I don't have permission. Here is what I changed: ${data.explanation}`
+                    }])
+                }
+            } else {
+                // Normal message
+                const contextMsg = currentAttachments.length > 0
+                    ? `\n\n(Context used: ${currentAttachments.map(c => c.name).join(', ')})`
+                    : ""
 
-            setMessages(prev => [...prev, {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content: data.content + contextMsg
-            }])
+                setMessages(prev => [...prev, {
+                    id: (Date.now() + 1).toString(),
+                    role: 'assistant',
+                    content: (data.content || "I didn't understand that.") + contextMsg
+                }])
+            }
 
         } catch (error) {
             console.error('Chat error:', error)

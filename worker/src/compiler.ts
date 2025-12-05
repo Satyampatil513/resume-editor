@@ -103,9 +103,20 @@ export async function compileLatexContent(jobId: string, content: string): Promi
             // --enable-installer: Allow MiKTeX to install missing packages
             await execa('pdflatex', ['-interaction=nonstopmode', '-output-directory=.', '--enable-installer', 'main.tex'], { cwd: runDir });
         } catch (e: any) {
-            console.error(`[${jobId}] pdflatex failed:`, e.message);
-            if (e.stdout) console.error(`[${jobId}] stdout:\n`, e.stdout);
-            throw new Error('Compilation failed');
+            console.error(`[${jobId}] pdflatex exited with error:`, e.message);
+
+            // Check if PDF was generated anyway (pdflatex often returns non-zero on warnings)
+            const pdfPath = path.join(runDir, 'main.pdf');
+            if (await fs.pathExists(pdfPath)) {
+                console.log(`[${jobId}] PDF generated despite errors/warnings.`);
+                // Continue execution
+            } else {
+                // Throw an object with the logs so the worker can save it
+                throw {
+                    message: 'Compilation failed',
+                    logs: e.stdout || e.stderr || 'No logs available'
+                };
+            }
         }
 
         const pdfPath = path.join(runDir, 'main.pdf');
