@@ -1,56 +1,144 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 
+// --- Helper Functions for "The Line Number Trick" ---
+
+/**
+ * Adds line numbers to the code for the AI context.
+ * Format: "1: first line\n2: second line"
+ */
+function addLineNumbers(code: string): string {
+    return code.split('\n').map((line, i) => `${i + 1}: ${line}`).join('\n');
+}
+
+/**
+ * Removes line numbers from the code (if the AI hallucinates them in the output).
+ */
+function stripLineNumbers(code: string): string {
+    return code.replace(/^\d+:\s/gm, '');
+}
+
+/**
+ * Applies a list of patch operations to the original code.
+ */
+function applyPatches(originalCode: string, operations: any[]): string {
+    const lines = originalCode.split('\n');
+    // Sort operations in reverse order (bottom up) to avoid index shifting issues
+    operations.sort((a, b) => b.start_line - a.start_line);
+
+    for (const op of operations) {
+        const { op: type, start_line, end_line, content, search } = op;
+        const startIdx = start_line - 1; // Convert 1-based to 0-based
+        const endIdx = end_line ? end_line - 1 : startIdx;
+
+        // Safety: Check bounds
+        if (startIdx < 0 || startIdx > lines.length) {
+            console.warn(`Patch out of bounds: Line ${start_line}`);
+            continue;
+        }
+
+        // Safety: Verify Content (The "Crack")
+        // We assume the AI might be slightly off, but if it provided 'search' text, we check it.
+        if (search) {
+            const targetLines = lines.slice(startIdx, endIdx + 1).join('\n');
+            // Simple normalization for comparison (ignore whitespace differences)
+            if (targetLines.trim() !== search.trim()) {
+                console.warn(`Patch Safety Check Failed at Line ${start_line}: Expected "${search}", found "${targetLines}"`);
+                // TODO: Implement fallback search? For now, we skip to be safe.
+                // continue; 
+            }
+        }
+
+        if (type === 'replace') {
+            // Remove old lines and splice in new lines
+            // "content" usually comes without line numbers, but we strip just in case
+            const newLines = stripLineNumbers(content).split('\n');
+            lines.splice(startIdx, (endIdx - startIdx) + 1, ...newLines);
+        } else if (type === 'insert_after') {
+            const newLines = stripLineNumbers(content).split('\n');
+            lines.splice(endIdx + 1, 0, ...newLines);
+        } else if (type === 'delete') {
+            lines.splice(startIdx, (endIdx - startIdx) + 1);
+        }
+    }
+
+    return lines.join('\n');
+}
+
 export async function POST(req: NextRequest) {
     try {
         const { messages, systemPrompt, currentCode } = await req.json();
         const apiKey = process.env.GEMINI_API_KEY;
 
         if (!apiKey) {
-            return NextResponse.json(
-                { error: "GEMINI_API_KEY is not set" },
-                { status: 500 }
-            );
+            return NextResponse.json({ error: "GEMINI_API_KEY is not set" }, { status: 500 });
         }
 
-        // Enhanced System Prompt
+        // 1. Decorate Code with Line Numbers
+        const codeWithLines = currentCode ? addLineNumbers(currentCode) : "No code provided.";
+
+        // 2. Enhanced System Prompt
         const baseSystemPrompt = `
 You are an expert LaTeX Resume Assistant.
-You have access to the user's current LaTeX resume code.
+You have access to the user's current LaTeX resume code, DECORATED WITH LINE NUMBERS.
 
-CURRENT CODE:
-${currentCode || "No code provided."}
+CURRENT CODE (Line Numbers are for reference only):
+${codeWithLines}
 
 INSTRUCTIONS:
 1. Analyze the user's request.
-2. If the user asks a question, explains something, or wants advice, return a JSON response with type "message":
-   { "type": "message", "content": "Your helpful response here." }
+2. If the user asks a question, returns "message".
+3. If the user asks for a CODE CHANGE, you must perform a SURGICAL EDIT.
+   - DO NOT return the full file.
+   - Return a "patch" response with a list of specific operations.
+   - Use the LINE NUMBERS from the context to target your edits.
 
-3. If the user asks to CHANGE, EDIT, ADD, REMOVE, or FIX anything in the resume (e.g., "Make the header blue", "Add a skill", "Fix the typo"), you MUST:
-   - Edit the CURRENT CODE to satisfy the request.
-   - CRITICAL: The resume MUST fit on ONE page. If your changes might push content to a second page, you MUST adjust vertical spacing (\\vspace), reduce margins, or slightly reduce font size to make it fit. Do NOT remove content, just compress the layout.
-   - CRITICAL: JSON String Escaping Rules:
-     - For LaTeX commands (e.g., \documentclass), use STANDARD JSON escaping: "\\documentclass" (one backslash in the string = two in JSON).
-     - DO NOT use double-escaping like "\\\\documentclass".
-     - For Newlines, use standard JSON escape: "\\n".
-   - Return a JSON response with type "update_code":
-   { "type": "update_code", "content": "THE_FULL_UPDATED_LATEX_CODE", "explanation": "Briefly explain what you changed." }
+RESPONSE FORMATS:
 
-4. IMPORTANT: If the user request implies a code change, DO NOT just explain how to do it. DO IT. Return "update_code".
+Type "message":
+{ "type": "message", "content": "Your helpful response." }
 
-5. ALWAYS return valid JSON.
+Type "patch" (For code changes):
+{
+  "type": "patch",
+  "explanation": "Brief summary of what changed.",
+  "operations": [
+    {
+      "op": "replace", 
+      "start_line": 10,
+      "end_line": 12, 
+      "search": "exact string content at these lines for verification",
+      "content": "new code to replace with" 
+    },
+    {
+      "op": "insert_after",
+      "start_line": 15, // Insert after this line
+      "content": "new code to insert"
+    },
+    {
+      "op": "delete",
+      "start_line": 20,
+      "end_line": 22,
+      "search": "content to delete"
+    }
+  ]
+}
+
+CRITICAL RULES:
+- "start_line" and "end_line" refer to the numbers in CURRENT CODE.
+- When replacing, "content" should be the RAW LaTeX code (NO line numbers).
+- JSON must be valid. Escape backslashes (e.g., "\\documentclass").
 ${systemPrompt || ""}
 `;
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({
-            model: "gemini-2.5-flash",
+            model: "gemini-2.5-flash", // Using the latest model
             generationConfig: {
                 responseMimeType: "application/json"
             }
         });
 
-        // Convert messages to Gemini format
         const history = messages.slice(0, -1).map((msg: any) => ({
             role: msg.role === "assistant" ? "model" : "user",
             parts: [{ text: msg.content }],
@@ -60,14 +148,8 @@ ${systemPrompt || ""}
 
         const chat = model.startChat({
             history: [
-                {
-                    role: "user",
-                    parts: [{ text: baseSystemPrompt }]
-                },
-                {
-                    role: "model",
-                    parts: [{ text: JSON.stringify({ type: "message", "content": "Understood. I am ready to assist with your LaTeX resume." }) }]
-                },
+                { role: "user", parts: [{ text: baseSystemPrompt }] },
+                { role: "model", parts: [{ text: JSON.stringify({ type: "message", "content": "Ready. I will use line numbers for surgical edits." }) }] },
                 ...history
             ]
         });
@@ -80,24 +162,33 @@ ${systemPrompt || ""}
         console.log(text);
         console.log("----------------------------");
 
-        // Parse the JSON response
         try {
             const jsonResponse = JSON.parse(text);
-            console.log("AI Response Parsed Type:", jsonResponse.type); // Debug log
+
+            // 3. Handle Patch Application Logic
+            if (jsonResponse.type === 'patch') {
+                console.log("Applying Patch Operations:", jsonResponse.operations.length);
+                const updatedCode = applyPatches(currentCode, jsonResponse.operations);
+
+                // Return as a standard "update_code" response for the frontend
+                return NextResponse.json({
+                    type: "update_code",
+                    content: updatedCode,
+                    explanation: jsonResponse.explanation
+                });
+            }
+
             return NextResponse.json(jsonResponse);
+
         } catch (e) {
             console.error("Failed to parse AI JSON response:", text);
-            // Fallback
             return NextResponse.json({ type: "message", content: text });
         }
 
     } catch (error: any) {
         console.error("Error in AI chat:", error);
         return NextResponse.json(
-            {
-                error: `Failed to process chat request: ${error.message}`,
-                stack: error.stack
-            },
+            { error: `Failed to process chat request: ${error.message}` },
             { status: 500 }
         );
     }
