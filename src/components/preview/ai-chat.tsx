@@ -54,7 +54,49 @@ export function AIChat({ projectId, selectedSection, components = [], currentCod
                     if (messagesError) throw messagesError
                     if (messagesData && messagesData.length > 0) {
                         setMessages(messagesData as any)
+                    } else if (currentCode) {
+                        // Project Loaded but no history. Create Initial Version.
+                        // We need to persist this so "Revert" is possible from start.
+                        // Avoid double-create issues by checking if we just did it or using a flag?
+                        // For now, let's just create it. The backend ID will be unique.
+                        const welcomeId = crypto.randomUUID()
+
+                        // Insert Welcome Message
+                        const { error: msgErr } = await supabase.from('chat_messages').insert({
+                            id: welcomeId,
+                            project_id: projectId,
+                            role: 'assistant',
+                            content: 'Hello! I can help you edit your resume. You can mention specific sections using "@" to give me their context.'
+                        })
+
+                        if (!msgErr) {
+                            // Insert Baseline Version
+                            const { data: vData } = await supabase.from('resume_versions').insert({
+                                project_id: projectId,
+                                chat_message_id: welcomeId,
+                                patch_content: { type: 'init', note: 'Original State' },
+                                full_code: currentCode
+                            }).select().single()
+
+                            if (vData) {
+                                setVersions([vData])
+                            }
+
+                            setMessages([{
+                                id: welcomeId,
+                                role: 'assistant',
+                                content: 'Hello! I can help you edit your resume. You can mention specific sections using "@" to give me their context.'
+                            }])
+                        } else {
+                            // Fallback to local state if insert fails
+                            setMessages([{
+                                id: 'welcome',
+                                role: 'assistant',
+                                content: 'Hello! I can help you edit your resume. You can mention specific sections using "@" to give me their context.'
+                            }])
+                        }
                     } else {
+                        // No code yet (maybe loading), just show welcome
                         setMessages([{
                             id: 'welcome',
                             role: 'assistant',
@@ -84,7 +126,7 @@ export function AIChat({ projectId, selectedSection, components = [], currentCod
             }
         }
         loadHistory()
-    }, [projectId])
+    }, [projectId, currentCode])
 
     // Auto-scroll to bottom
     useEffect(() => {

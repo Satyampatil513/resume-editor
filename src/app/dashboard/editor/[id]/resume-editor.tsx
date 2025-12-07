@@ -112,6 +112,11 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                             content: section.content
                         }))
                         setComponents(dynamicComponents)
+
+                        // Auto-compile preview on initial load
+                        setTimeout(() => {
+                            if (text) compilePreview(true, text)
+                        }, 100)
                     }
                 }
             }
@@ -352,24 +357,7 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={checkSyntax}
-                            disabled={isCheckingSyntax || isCompiling}
-                        >
-                            <Code className="h-4 w-4 mr-2" />
-                            {isCheckingSyntax ? 'Checking...' : 'Check Syntax'}
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={compilePreview}
-                            disabled={isCompiling}
-                        >
-                            <RefreshCw className={`h-4 w-4 mr-2 ${isCompiling ? 'animate-spin' : ''}`} />
-                            {isCompiling ? 'Compiling...' : 'Refresh Preview'}
-                        </Button>
+                        {/* Buttons were removed as requested to streamline UI */}
                         <Button
                             variant="outline"
                             size="sm"
