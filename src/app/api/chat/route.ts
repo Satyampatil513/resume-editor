@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/utils/supabase/server";
 
 // --- Helper Functions for "The Line Number Trick" ---
 
@@ -22,7 +23,7 @@ function stripLineNumbers(code: string): string {
  * Applies a list of patch operations to the original code.
  */
 function applyPatches(originalCode: string, operations: any[]): string {
-    const lines = originalCode.split('\n');
+    const lines = originalCode.split(/\r?\n/);
     // Sort operations in reverse order (bottom up) to avoid index shifting issues
     operations.sort((a, b) => b.start_line - a.start_line);
 
@@ -42,20 +43,19 @@ function applyPatches(originalCode: string, operations: any[]): string {
         if (search) {
             const targetLines = lines.slice(startIdx, endIdx + 1).join('\n');
             // Simple normalization for comparison (ignore whitespace differences)
-            if (targetLines.trim() !== search.trim()) {
-                console.warn(`Patch Safety Check Failed at Line ${start_line}: Expected "${search}", found "${targetLines}"`);
-                // TODO: Implement fallback search? For now, we skip to be safe.
-                // continue; 
+            if (targetLines.trim().replace(/\s+/g, ' ') !== search.trim().replace(/\s+/g, ' ')) {
+                console.warn(`Patch Safety Warning Line ${start_line}: Search Text Mismatch. Expected "${search}" found "${targetLines}"`);
+                // TODO: Implement fallback search? For now, we continue but warn.
             }
         }
 
         if (type === 'replace') {
             // Remove old lines and splice in new lines
             // "content" usually comes without line numbers, but we strip just in case
-            const newLines = stripLineNumbers(content).split('\n');
+            const newLines = stripLineNumbers(content).split(/\r?\n/);
             lines.splice(startIdx, (endIdx - startIdx) + 1, ...newLines);
         } else if (type === 'insert_after') {
-            const newLines = stripLineNumbers(content).split('\n');
+            const newLines = stripLineNumbers(content).split(/\r?\n/);
             lines.splice(endIdx + 1, 0, ...newLines);
         } else if (type === 'delete') {
             lines.splice(startIdx, (endIdx - startIdx) + 1);
@@ -67,17 +67,35 @@ function applyPatches(originalCode: string, operations: any[]): string {
 
 export async function POST(req: NextRequest) {
     try {
-        const { messages, systemPrompt, currentCode } = await req.json();
+        const { messages, systemPrompt, currentCode, projectId } = await req.json();
         const apiKey = process.env.GEMINI_API_KEY;
 
         if (!apiKey) {
             return NextResponse.json({ error: "GEMINI_API_KEY is not set" }, { status: 500 });
         }
 
-        // 1. Decorate Code with Line Numbers
+        const supabase = await createClient();
+
+        // 1. Get authenticated user
+        const { data: { user } } = await supabase.auth.getUser();
+        // If no user, we might still want to allow chat for demo? 
+        // For now, let's assume auth is required for saving history.
+
+        const lastMessage = messages[messages.length - 1];
+
+        // 2. Save User Message
+        if (projectId && user) {
+            await supabase.from('chat_messages').insert({
+                project_id: projectId,
+                role: 'user',
+                content: lastMessage.content
+            });
+        }
+
+        // 3. Decorate Code with Line Numbers
         const codeWithLines = currentCode ? addLineNumbers(currentCode) : "No code provided.";
 
-        // 2. Enhanced System Prompt
+        // 4. Enhanced System Prompt
         const baseSystemPrompt = `
 You are an expert LaTeX Resume Assistant.
 You have access to the user's current LaTeX resume code, DECORATED WITH LINE NUMBERS.
@@ -128,23 +146,27 @@ CRITICAL RULES:
 - "start_line" and "end_line" refer to the numbers in CURRENT CODE.
 - When replacing, "content" should be the RAW LaTeX code (NO line numbers).
 - JSON must be valid. Escape backslashes (e.g., "\\documentclass").
+- CRITICAL for LaTeX: You MUST double-escape all backslashes in the JSON string "content".
+  Example: To insert "\vspace{1pt}", you must write "content": "\\vspace{1pt}".
+  Example: To insert "\textbf{Skills}", you must write "content": "\\textbf{Skills}".
+  If you write "content": "\vspace", it will be invalid JSON. If you write "content": "vspace", it will look wrong.
+- DO NOT strip existing backslashes from "search" or "content".
 ${systemPrompt || ""}
 `;
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({
-            model: "gemini-2.5-flash", // Using the latest model
+            model: "gemini-2.5-flash",
             generationConfig: {
                 responseMimeType: "application/json"
             }
         });
 
+        // Convert messages to Gemini format (excluding the last one which is sent separately)
         const history = messages.slice(0, -1).map((msg: any) => ({
             role: msg.role === "assistant" ? "model" : "user",
             parts: [{ text: msg.content }],
         }));
-
-        const lastMessage = messages[messages.length - 1];
 
         const chat = model.startChat({
             history: [
@@ -163,25 +185,87 @@ ${systemPrompt || ""}
         console.log("----------------------------");
 
         try {
-            const jsonResponse = JSON.parse(text);
+            let jsonResponse;
+            const cleanText = text.trim();
+            try {
+                jsonResponse = JSON.parse(cleanText);
+            } catch (e) {
+                // Try stripping markdown
+                const noMarkdown = cleanText.replace(/^```(json)?\s*|\s*```$/gi, '').trim();
+                try {
+                    jsonResponse = JSON.parse(noMarkdown);
+                } catch (e2) {
+                    // Try finding { and }
+                    const firstBrace = cleanText.indexOf('{');
+                    const lastBrace = cleanText.lastIndexOf('}');
+                    if (firstBrace !== -1 && lastBrace !== -1) {
+                        jsonResponse = JSON.parse(cleanText.substring(firstBrace, lastBrace + 1));
+                    } else {
+                        throw e; // Original error if all fails
+                    }
+                }
+            }
 
-            // 3. Handle Patch Application Logic
-            if (jsonResponse.type === 'patch') {
-                console.log("Applying Patch Operations:", jsonResponse.operations.length);
+            // 5. Save AI Response
+            let aiMessageId = null;
+            if (projectId && user) {
+                // Determine content to save (summary if it's a code update)
+                const saveContent = jsonResponse.type === 'patch'
+                    ? `I've updated your resume code. ${jsonResponse.explanation || ''}`
+                    : (jsonResponse.content || "I didn't understand that.");
+
+                const { data: aiMsg, error: aiError } = await supabase.from('chat_messages').insert({
+                    project_id: projectId,
+                    role: 'assistant',
+                    content: saveContent
+                }).select().single();
+
+                if (aiMsg) aiMessageId = aiMsg.id;
+            }
+
+            // 6. Handle Patch Application Logic
+            const responseType = jsonResponse.type?.toLowerCase().trim();
+            console.log("AI Response Type:", responseType);
+
+            if (responseType === 'patch') {
+                console.log("Applying Patch Operations:", jsonResponse.operations?.length);
+
+                if (!jsonResponse.operations || !Array.isArray(jsonResponse.operations)) {
+                    console.error("Patch response missing 'operations' array");
+                    return NextResponse.json({ type: "message", content: "Error: AI generated an invalid patch structure." });
+                }
+
                 const updatedCode = applyPatches(currentCode, jsonResponse.operations);
+
+                // 7. Save Version History (Patch Snapshot)
+                let newVersion = null;
+                if (projectId && aiMessageId && user) {
+                    const { data: vData, error: vError } = await supabase.from('resume_versions').insert({
+                        project_id: projectId,
+                        chat_message_id: aiMessageId,
+                        patch_content: jsonResponse.operations,
+                        full_code: updatedCode
+                    }).select().single();
+
+                    if (vData) newVersion = vData;
+                    else console.error("Failed to fetch new version:", vError);
+                }
 
                 // Return as a standard "update_code" response for the frontend
                 return NextResponse.json({
                     type: "update_code",
                     content: updatedCode,
-                    explanation: jsonResponse.explanation
+                    explanation: jsonResponse.explanation,
+                    message_id: aiMessageId,
+                    version: newVersion // Return full version object
                 });
             }
 
             return NextResponse.json(jsonResponse);
 
-        } catch (e) {
-            console.error("Failed to parse AI JSON response:", text);
+        } catch (e: any) {
+            console.error("Failed to parse AI JSON response:", e.message);
+            console.error("Raw Text:", text);
             return NextResponse.json({ type: "message", content: text });
         }
 
