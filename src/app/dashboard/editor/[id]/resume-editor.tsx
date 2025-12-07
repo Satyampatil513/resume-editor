@@ -233,6 +233,28 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
             // Re-compile (pass false to prevent infinite loop if fix fails)
             await compilePreview(false)
 
+            // Log to History (Chat + Version)
+            try {
+                // 1. Create Chat Message
+                const { data: aiMsg } = await supabase.from('chat_messages').insert({
+                    project_id: projectId,
+                    role: 'assistant',
+                    content: 'I automatically fixed some LaTeX compilation errors.'
+                }).select().single()
+
+                if (aiMsg) {
+                    // 2. Create Version
+                    await supabase.from('resume_versions').insert({
+                        project_id: projectId,
+                        chat_message_id: aiMsg.id,
+                        patch_content: { type: 'auto-fix', note: 'Automated compilation fix' },
+                        full_code: data.fixedCode
+                    })
+                }
+            } catch (err) {
+                console.error("Failed to save auto-fix history:", err)
+            }
+
         } catch (error: any) {
             console.error('Auto-fix failed:', error)
             setCompileError(`Auto-fix failed: ${error.message}`)
@@ -241,20 +263,24 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
         }
     }
 
-    const compilePreview = async (shouldAutoFix: boolean | any = true) => {
+    const compilePreview = async (shouldAutoFix: boolean | any = true, contentOverride?: string) => {
         setIsCompiling(true)
         try {
             const supabase = createClient()
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) throw new Error('Not authenticated')
 
-            const { data: fileContent } = await supabase
-                .storage
-                .from('resume-files')
-                .download(`${user.id}/${projectId}/main.tex`)
+            let text = contentOverride
 
-            if (!fileContent) throw new Error('Could not download main.tex')
-            const text = await fileContent.text()
+            if (!text) {
+                const { data: fileContent } = await supabase
+                    .storage
+                    .from('resume-files')
+                    .download(`${user.id}/${projectId}/main.tex`)
+
+                if (!fileContent) throw new Error('Could not download main.tex')
+                text = await fileContent.text()
+            }
 
             const response = await fetch('/api/compile', {
                 method: 'POST',
@@ -270,7 +296,7 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                 setCompileLogs(logs) // Capture logs if available
 
                 // Auto-fix if enabled and logs are present
-                if (logs && shouldAutoFix !== false) {
+                if (logs && shouldAutoFix !== false && text) {
                     console.log("Compilation failed, attempting auto-fix...")
                     setCompileError("Compilation failed. Attempting to auto-fix with AI...")
                     await autoFix(logs, text)
@@ -287,9 +313,6 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                 setCompileLogs(null)
 
                 // Create a data URI for the PDF
-                // #toolbar=0: Hides the toolbar
-                // #navpanes=0: Hides the sidebar (thumbnails)
-                // #view=FitH: Fits the page width
                 const dataUri = `data:application/pdf;base64,${data.pdf}#toolbar=0&navpanes=0&view=FitH`
                 setPdfUrl(dataUri)
             }
@@ -402,6 +425,7 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                     <ResizablePanelGroup direction="horizontal">
                         <ResizablePanel defaultSize={30} minSize={20}>
                             <AIChat
+                                projectId={projectId}
                                 selectedSection={selectedSection}
                                 components={components}
                                 currentCode={latexCode}
@@ -421,7 +445,7 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                                             })
 
                                         // Refresh preview
-                                        await compilePreview()
+                                        await compilePreview(true, newCode)
                                     }
                                 }}
                             />
