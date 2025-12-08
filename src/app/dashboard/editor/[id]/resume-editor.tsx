@@ -24,12 +24,12 @@ interface ResumeEditorProps {
 export function ResumeEditor({ projectId }: ResumeEditorProps) {
     const [resumeData, setResumeData] = useState<ResumeData>({})
     const [projectName, setProjectName] = useState("")
-    const [isSaving, setIsSaving] = useState(false)
+
     const [showFileTree, setShowFileTree] = useState(true)
     const [selectedSection, setSelectedSection] = useState<string | null>(null)
     const [files, setFiles] = useState<FileNode[]>([])
     const [components, setComponents] = useState<ComponentItem[]>([])
-    const [isCheckingSyntax, setIsCheckingSyntax] = useState(false)
+
     const [isCompiling, setIsCompiling] = useState(false)
     const [pdfUrl, setPdfUrl] = useState<string | null>(null)
     const [compileError, setCompileError] = useState<string | null>(null)
@@ -126,58 +126,9 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
         }
     }
 
-    const saveResume = async () => {
-        // Saving logic would need to update the actual .tex file in storage
-        // For now, we'll just show a toast or alert
-        alert("Saving functionality for LaTeX files will be implemented soon.")
-    }
 
-    const checkSyntax = async () => {
-        setIsCheckingSyntax(true)
-        try {
-            // Get main.tex content
-            const supabase = createClient()
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) throw new Error('Not authenticated')
 
-            const { data: fileContent, error: downloadError } = await supabase
-                .storage
-                .from('resume-files')
-                .download(`${user.id}/${projectId}/main.tex`)
 
-            if (!fileContent) throw new Error('Could not download main.tex')
-
-            const text = await fileContent.text()
-
-            const response = await fetch('/api/check-syntax', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: text })
-            })
-
-            if (!response.ok) {
-                const errorData = await response.json()
-                throw new Error(errorData.error || 'Syntax check failed')
-            }
-
-            const data = await response.json()
-
-            if (data.errors && data.errors.length > 0) {
-                const errorMsg = data.errors.map((e: any) =>
-                    `Line ${e.line}: ${e.message} (${e.code})`
-                ).join('\n')
-                alert(`Found ${data.errors.length} syntax issues:\n\n${errorMsg}`)
-            } else {
-                alert("No syntax errors found!")
-            }
-
-        } catch (error: any) {
-            console.error('Syntax check error:', error)
-            alert(`Syntax check failed: ${error.message}`)
-        } finally {
-            setIsCheckingSyntax(false)
-        }
-    }
 
     const autoFix = async (logs?: string, code?: string) => {
         const logsToUse = logs || compileLogs
@@ -331,7 +282,7 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
     }
 
     return (
-        <div className="h-screen flex flex-col bg-background overflow-hidden">
+        <div className="h-[calc(100vh-64px)] flex flex-col bg-background overflow-hidden">
             {/* Header */}
             <div className="border-b bg-card shrink-0">
                 <div className="flex items-center justify-between px-4 py-3">
@@ -358,15 +309,6 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
 
                     <div className="flex items-center gap-2">
                         {/* Buttons were removed as requested to streamline UI */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={saveResume}
-                            disabled={isSaving}
-                        >
-                            <Save className="h-4 w-4 mr-2" />
-                            {isSaving ? 'Saving...' : 'Save'}
-                        </Button>
                         <Button size="sm">
                             <Download className="h-4 w-4 mr-2" />
                             Export PDF
@@ -409,9 +351,9 @@ export function ResumeEditor({ projectId }: ResumeEditorProps) {
                 )}
 
                 {/* Resizable Panels: Chat & Preview */}
-                <div className="flex-1">
-                    <ResizablePanelGroup direction="horizontal">
-                        <ResizablePanel defaultSize={30} minSize={20}>
+                <div className="flex-1 flex flex-col min-h-0">
+                    <ResizablePanelGroup direction="horizontal" className="h-full">
+                        <ResizablePanel defaultSize={30} minSize={20} className="h-full">
                             <AIChat
                                 projectId={projectId}
                                 selectedSection={selectedSection}
