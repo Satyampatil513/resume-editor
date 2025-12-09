@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, FileText, Sparkles, Zap, CheckCircle2 } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
+import { VisitTracker } from "@/components/visit-tracker"
 
 export default function Home() {
   return (
@@ -32,6 +33,7 @@ export default function Home() {
         </div>
       </header>
 
+      <VisitTracker />
       <main className="flex-1">
         <section className="space-y-6 pb-8 pt-6 md:pt-10 lg:pt-16 relative">
           <div className="container flex max-w-[64rem] flex-col items-center gap-4 md:gap-6 text-center relative z-10 mx-auto px-4">

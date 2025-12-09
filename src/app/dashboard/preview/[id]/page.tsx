@@ -136,7 +136,7 @@ export default function PreviewPage() {
 
                     {/* AI Chat / Editor */}
                     <ResizablePanel defaultSize={30} minSize={20}>
-                        <AIChat />
+                        <AIChat projectId={params.id as string} />
                     </ResizablePanel>
                 </ResizablePanelGroup>
             </div>
