@@ -4,25 +4,41 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/utils/supabase/client"
 import { Loader2 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 
 export function LoginForm() {
     const [isLoading, setIsLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+    const searchParams = useSearchParams()
+
+    useEffect(() => {
+        const errorParam = searchParams.get('error')
+        if (errorParam) {
+            setError(decodeURIComponent(errorParam))
+        }
+    }, [searchParams])
 
     const handleLogin = async () => {
         try {
             setIsLoading(true)
+            setError(null)
             const supabase = createClient()
-            await supabase.auth.signInWithOAuth({
+            const { error: signInError } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
                     redirectTo: `${location.origin}/auth/callback`,
                 },
             })
-        } catch (error) {
+
+            if (signInError) {
+                setError(signInError.message)
+                setIsLoading(false)
+            }
+        } catch (error: any) {
             console.error(error)
-        } finally {
-            // usually we don't set loading false because we redirect
+            setError(error.message || 'An unexpected error occurred')
+            setIsLoading(false)
         }
     }
 
@@ -32,7 +48,13 @@ export function LoginForm() {
                 <CardTitle className="text-2xl font-bold tracking-tight">Welcome back</CardTitle>
                 <CardDescription className="text-base">Sign in to access your resume projects</CardDescription>
             </CardHeader>
-            <CardContent className="pb-8">
+            <CardContent className="pb-8 space-y-4">
+                {error && (
+                    <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 rounded-md border border-red-200 dark:border-red-800">
+                        {error}
+                    </div>
+                )}
+
                 <Button
                     onClick={handleLogin}
                     className="w-full h-12 text-base font-medium transition-all hover:scale-[1.02] bg-white hover:bg-gray-50 text-gray-900 border border-gray-200 shadow-sm dark:bg-white/10 dark:text-white dark:border-white/10 dark:hover:bg-white/20"
