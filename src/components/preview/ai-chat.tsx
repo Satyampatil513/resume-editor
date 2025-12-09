@@ -308,8 +308,8 @@ export function AIChat({ projectId, selectedSection, components = [], currentCod
     }
 
     return (
-        <div className="flex flex-col h-full bg-background border-r relative">
-            <div className="p-4 border-b">
+        <div className="flex flex-col h-full min-h-0 bg-background border-r relative" style={{ height: '100%' }}>
+            <div className="p-4 border-b shrink-0">
                 <h3 className="font-semibold flex items-center gap-2">
                     <Bot className="h-5 w-5 text-primary" />
                     AI Assistant
@@ -340,8 +340,8 @@ export function AIChat({ projectId, selectedSection, components = [], currentCod
                             </Avatar>
                             <div
                                 className={`rounded-lg p-3 text-sm max-w-[80%] whitespace-pre-wrap ${message.role === 'user'
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'bg-muted'
+                                    ? 'bg-blue-600 text-white shadow-sm'
+                                    : 'bg-zinc-800 text-zinc-100 border border-zinc-700 shadow-sm'
                                     }`}
                             >
                                 {message.content.split('\n\nAttached Context:')[0]}
@@ -378,25 +378,27 @@ export function AIChat({ projectId, selectedSection, components = [], currentCod
             </div>
 
             {/* Mention Menu */}
-            {showMentionMenu && filteredComponents.length > 0 && (
-                <div className="absolute bottom-[80px] left-4 right-4 bg-popover border rounded-md shadow-lg overflow-hidden z-10 max-h-[200px] overflow-y-auto animate-in slide-in-from-bottom-2">
-                    <div className="p-2 text-xs font-medium text-muted-foreground bg-muted/50">
-                        Suggested Sections
+            {
+                showMentionMenu && filteredComponents.length > 0 && (
+                    <div className="absolute bottom-[80px] left-4 right-4 bg-popover border rounded-md shadow-lg overflow-hidden z-10 max-h-[200px] overflow-y-auto animate-in slide-in-from-bottom-2">
+                        <div className="p-2 text-xs font-medium text-muted-foreground bg-muted/50">
+                            Suggested Sections
+                        </div>
+                        {filteredComponents.map(component => (
+                            <button
+                                key={component.id}
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2 transition-colors"
+                                onClick={() => handleSelectComponent(component)}
+                            >
+                                {component.icon}
+                                <span>{component.name}</span>
+                            </button>
+                        ))}
                     </div>
-                    {filteredComponents.map(component => (
-                        <button
-                            key={component.id}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2 transition-colors"
-                            onClick={() => handleSelectComponent(component)}
-                        >
-                            {component.icon}
-                            <span>{component.name}</span>
-                        </button>
-                    ))}
-                </div>
-            )}
+                )
+            }
 
-            <div className="p-4 border-t mt-auto bg-background">
+            <div className="p-4 border-t mt-auto bg-background shrink-0">
                 {/* Attached Chips */}
                 {attachedComponents.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
@@ -451,6 +453,6 @@ export function AIChat({ projectId, selectedSection, components = [], currentCod
                     </Button>
                 </form>
             </div>
-        </div>
+        </div >
     )
 }
