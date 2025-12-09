@@ -1,0 +1,13 @@
+services:
+  - type: worker
+    name: resume-editor-worker
+    env: docker
+    dockerContext: worker
+    dockerfilePath: worker/Dockerfile
+    repo: https://github.com/Satyampatil513/resume-editor
+    branch: main
+    envVars:
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
